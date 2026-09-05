@@ -1,0 +1,49 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "credit_scoring"
+version = "0.0.1"
+description = "end-to-end ML project predicting Expected Loss for personal loans"
+authors = [
+  { name = "isailzc" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+dependencies = [
+    "category-encoders==2.4.0",
+    "imbalanced-learn==0.9.0",
+    "joblib==1.1.0",
+    "loguru",
+    "numpy==1.21.5",
+    "pandas==1.4.1",
+    "pip",
+    "pytest",
+    "python-dotenv",
+    "ruff",
+    "scikit-learn==1.0.2",
+    "scipy==1.7.3",
+    "tqdm",
+    "typer",
+    "xgboost==1.5.0",
+]
+requires-python = "~=3.9.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["credit_scoring"]
+include = ["pyproject.toml", "credit_scoring/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["credit_scoring"]
+force-sort-within-sections = true
+
