@@ -4,7 +4,7 @@ from loguru import logger
 from tqdm import tqdm
 import typer
 
-from credit-scoring.config import PROCESSED_DATA_DIR
+from credit_scoring.config import PROCESSED_DATA_DIR
 
 app = typer.Typer()
 
