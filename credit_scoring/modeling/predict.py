@@ -1,29 +1,68 @@
 from pathlib import Path
-
+import pickle
+import pandas as pd
 from loguru import logger
-from tqdm import tqdm
 import typer
 
-from credit-scoring.config import MODELS_DIR, PROCESSED_DATA_DIR
+from credit_scoring.config import MODELS_DIR, PROCESSED_DATA_DIR, RAW_DATA_DIR
+from credit_scoring.features import calidad_datos, filtrar_datos, preparar_datos_inferencia
 
 app = typer.Typer()
 
 
+def cargar_modelo(modelo: str):
+    """Carga un pipeline entrenado de la carpeta models/"""
+    ruta = MODELS_DIR / f'pipe_ejecucion_{modelo}.pickle'
+    if not ruta.exists():
+        raise FileNotFoundError(f"El modelo {ruta} no existe. Ejecuta 'python credit_scoring/train.py' primero.")
+    
+    with open(ruta, mode='rb') as file:
+        return pickle.load(file)
+
+
 @app.command()
 def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    features_path: Path = PROCESSED_DATA_DIR / "test_features.csv",
-    model_path: Path = MODELS_DIR / "model.pkl",
-    predictions_path: Path = PROCESSED_DATA_DIR / "test_predictions.csv",
-    # -----------------------------------------
+    input_file: Path = RAW_DATA_DIR / "validacion.csv",
+    output_file: Path = PROCESSED_DATA_DIR / "predictions.csv"
 ):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Performing inference for model...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Inference complete.")
-    # -----------------------------------------
+    """Ejecuta inferencia en un dataset nuevo y guarda la Pérdida Esperada."""
+    if not input_file.exists():
+        logger.error(f"Archivo de entrada no encontrado en: {input_file}")
+        return
+
+    logger.info(f"Cargando datos para inferencia desde {input_file}...")
+    df = pd.read_csv(input_file, index_col=0)
+
+    logger.info("Aplicando transformaciones de inferencia...")
+    df_filtrado = filtrar_datos(df)
+    df_limpio = calidad_datos(df_filtrado)
+    x_inferencia = preparar_datos_inferencia(df_limpio)
+
+    logger.info("Cargando modelos entrenados...")
+    pipe_pd = cargar_modelo('pd')
+    pipe_ead = cargar_modelo('ead')
+    pipe_lgd = cargar_modelo('lgd')
+
+    logger.info("Generando predicciones de PD, EAD y LGD...")
+    scoring_pd = pipe_pd.predict_proba(x_inferencia)[:, 1]
+    ead = pipe_ead.predict(x_inferencia)
+    lgd = pipe_lgd.predict(x_inferencia)
+
+    logger.info("Calculando Pérdida Esperada (Expected Loss)...")
+    df_resultados = pd.DataFrame({
+        'principal': x_inferencia['principal'],
+        'pd': scoring_pd,
+        'ead': ead,
+        'lgd': lgd
+    }, index=x_inferencia.index)
+
+    df_resultados['perdida_esperada'] = round(
+        df_resultados['pd'] * df_resultados['principal'] * df_resultados['ead'] * df_resultados['lgd'], 2
+    )
+
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    df_resultados.to_csv(output_file)
+    logger.success(f"Predicciones guardadas exitosamente en {output_file}")
 
 
 if __name__ == "__main__":

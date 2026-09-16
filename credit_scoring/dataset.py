@@ -1,28 +1,54 @@
 from pathlib import Path
-
+import pandas as pd
 from loguru import logger
-from tqdm import tqdm
 import typer
 
-from credit-scoring.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+from credit_scoring.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
+from credit_scoring.features import (
+    filtrar_datos, 
+    calidad_datos, 
+    creacion_variables_pd, 
+    creacion_variables_ead, 
+    creacion_variables_lgd
+)
 
 app = typer.Typer()
 
 
 @app.command()
 def main(
-    # ---- REPLACE DEFAULT PATHS AS APPROPRIATE ----
-    input_path: Path = RAW_DATA_DIR / "dataset.csv",
-    output_path: Path = PROCESSED_DATA_DIR / "dataset.csv",
-    # ----------------------------------------------
+    input_filename: str = "credit_scoring.csv"
 ):
-    # ---- REPLACE THIS WITH YOUR OWN CODE ----
-    logger.info("Processing dataset...")
-    for i in tqdm(range(10), total=10):
-        if i == 5:
-            logger.info("Something happened for iteration 5.")
-    logger.success("Processing dataset complete.")
-    # -----------------------------------------
+    logger.info("Cargando datos crudos...")
+    ruta_completa = RAW_DATA_DIR / input_filename
+    if not ruta_completa.exists():
+        logger.error(f"El archivo {ruta_completa} no existe.")
+        return
+
+    df = pd.read_csv(ruta_completa, index_col=0)
+
+    logger.info("Aplicando limpieza y calidad de datos...")
+    df_filtrado = filtrar_datos(df)
+    df_limpio = calidad_datos(df_filtrado)
+
+    logger.info("Generando variables objetivo (PD, EAD, LGD)...")
+    x_pd, y_pd = creacion_variables_pd(df_limpio)
+    x_ead, y_ead = creacion_variables_ead(df_limpio)
+    x_lgd, y_lgd = creacion_variables_lgd(df_limpio) 
+
+    logger.info("Guardando matrices procesadas en data/processed/...")
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    x_pd.to_pickle(PROCESSED_DATA_DIR / 'x_pd.pkl')
+    y_pd.to_pickle(PROCESSED_DATA_DIR / 'y_pd.pkl')
+    
+    x_ead.to_pickle(PROCESSED_DATA_DIR / 'x_ead.pkl')
+    y_ead.to_pickle(PROCESSED_DATA_DIR / 'y_ead.pkl')
+    
+    x_lgd.to_pickle(PROCESSED_DATA_DIR / 'x_lgd.pkl')
+    y_lgd.to_pickle(PROCESSED_DATA_DIR / 'y_lgd.pkl')
+    
+    logger.success("Procesamiento de datos completado.")
 
 
 if __name__ == "__main__":
