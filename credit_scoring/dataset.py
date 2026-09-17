@@ -1,52 +1,52 @@
-from loguru import logger
+import numpy as np
 import pandas as pd
-import typer
+from loguru import logger
+from credit_scoring.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+from credit_scoring.features import filtrar_datos, calidad_datos
 
-from credit_scoring.config import PROCESSED_DATA_DIR, RAW_DATA_DIR
-from credit_scoring.features import (
-    calidad_datos,
-    creacion_variables_ead,
-    creacion_variables_lgd,
-    creacion_variables_pd,
-    filtrar_datos,
-)
-
-app = typer.Typer()
-
-
-@app.command()
-def main(input_filename: str = "credit_scoring.csv"):
+def main():
     logger.info("Cargando datos crudos...")
-    ruta_completa = RAW_DATA_DIR / input_filename
-    if not ruta_completa.exists():
-        logger.error(f"El archivo {ruta_completa} no existe.")
-        return
+    df = pd.read_csv(RAW_DATA_DIR / 'credit_scoring.csv', index_col=0)
+    
+    logger.info("Aplicando filtros y calidad de datos...")
+    df = filtrar_datos(df)
+    df = calidad_datos(df)
+    
+    # --- CREACIÓN DE TARGETS ---
+    logger.info("Generando datasets para PD, EAD y LGD...")
+    
+    # 1. Dataset PD
+    df_pd = df.copy()
+    df_pd['target_pd'] = np.where(df_pd.estado.isin(['Charged Off', 'Does not meet the credit policy. Status:Charged Off', 'Default']), 1, 0)
+    df_pd.drop(columns=['estado', 'imp_amortizado', 'imp_recuperado'], inplace=True)
+    x_pd, y_pd = df_pd.iloc[:, :-1], df_pd.iloc[:, -1]
+    
+    # 2. Dataset EAD
+    df_ead = df.copy()
+    df_ead['pendiente'] = df_ead.principal - df_ead.imp_amortizado
+    df_ead['target_ead'] = df_ead.pendiente / df_ead.principal
+    df_ead.drop(columns=['estado', 'imp_amortizado', 'imp_recuperado', 'pendiente'], inplace=True)
+    x_ead, y_ead = df_ead.iloc[:, :-1], df_ead.iloc[:, -1]
+    
+    # 3. Dataset LGD
+    df_lgd = df.copy()
+    df_lgd['pendiente'] = df_lgd.principal - df_lgd.imp_amortizado
+    df_lgd['target_lgd'] = 1 - (df_lgd.imp_recuperado / df_lgd.pendiente)
+    df_lgd['target_lgd'] = df_lgd['target_lgd'].fillna(0)
+    df_lgd.drop(columns=['estado', 'imp_amortizado', 'imp_recuperado', 'pendiente'], inplace=True)
+    x_lgd, y_lgd = df_lgd.iloc[:, :-1], df_lgd.iloc[:, -1]
 
-    df = pd.read_csv(ruta_completa, index_col=0)
-
-    logger.info("Aplicando limpieza y calidad de datos...")
-    df_filtrado = filtrar_datos(df)
-    df_limpio = calidad_datos(df_filtrado)
-
-    logger.info("Generando variables objetivo (PD, EAD, LGD)...")
-    x_pd, y_pd = creacion_variables_pd(df_limpio)
-    x_ead, y_ead = creacion_variables_ead(df_limpio)
-    x_lgd, y_lgd = creacion_variables_lgd(df_limpio)
-
-    logger.info("Guardando matrices procesadas en data/processed/...")
+    # Guardar en procesados
     PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    x_pd.to_pickle(PROCESSED_DATA_DIR / "x_pd.pkl")
-    y_pd.to_pickle(PROCESSED_DATA_DIR / "y_pd.pkl")
-
-    x_ead.to_pickle(PROCESSED_DATA_DIR / "x_ead.pkl")
-    y_ead.to_pickle(PROCESSED_DATA_DIR / "y_ead.pkl")
-
-    x_lgd.to_pickle(PROCESSED_DATA_DIR / "x_lgd.pkl")
-    y_lgd.to_pickle(PROCESSED_DATA_DIR / "y_lgd.pkl")
-
-    logger.success("Procesamiento de datos completado.")
-
+    
+    pd.to_pickle(x_pd, PROCESSED_DATA_DIR / "x_pd.pkl")
+    pd.to_pickle(y_pd, PROCESSED_DATA_DIR / "y_pd.pkl")
+    pd.to_pickle(x_ead, PROCESSED_DATA_DIR / "x_ead.pkl")
+    pd.to_pickle(y_ead, PROCESSED_DATA_DIR / "y_ead.pkl")
+    pd.to_pickle(x_lgd, PROCESSED_DATA_DIR / "x_lgd.pkl")
+    pd.to_pickle(y_lgd, PROCESSED_DATA_DIR / "y_lgd.pkl")
+    
+    logger.success("Datasets generados correctamente en data/processed/")
 
 if __name__ == "__main__":
-    app()
+    main()
