@@ -1,5 +1,6 @@
 from pathlib import Path
 import pickle
+import numpy as np
 
 from loguru import logger
 import pandas as pd
@@ -48,8 +49,11 @@ def main(
 
     logger.info("Generando predicciones de PD, EAD y LGD...")
     scoring_pd = pipe_pd.predict_proba(x_inferencia)[:, 1]
-    ead = pipe_ead.predict(x_inferencia)
-    lgd = pipe_lgd.predict(x_inferencia)
+    ead_raw = pipe_ead.predict(x_inferencia)
+    lgd_raw = pipe_lgd.predict(x_inferencia)
+
+    ead = np.clip(ead_raw, 0, 1)
+    lgd = np.clip(lgd_raw, 0, 1)
 
     logger.info("Calculando Pérdida Esperada (Expected Loss)...")
     df_resultados = pd.DataFrame(
