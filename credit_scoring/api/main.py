@@ -50,16 +50,19 @@ class ClienteData(BaseModel):
     vivienda: Literal['RENT', 'MORTGAGE', 'OWN', 'OTHER']
     ingresos_verificados: Literal['Verified', 'Source Verified', 'Not Verified']
     num_lineas_credito: int = Field(..., ge=0)
-    porc_tarjetas_75p: float = Field(..., ge=0, le=100)
     porc_uso_revolving: float = Field(..., ge=0)
-    num_cancelaciones_12meses: int = Field(..., ge=0)
     num_derogatorios: int = Field(..., ge=0)
     finalidad: str
     tipo_interes: float = Field(..., ge=0)
     imp_cuota: float = Field(..., gt=0)
+    
+    # --- Agregados faltantes ---
+    ingresos: float = Field(..., ge=0)
+    num_cuotas: Literal[' 36 months', ' 60 months'] # Revisa si tu dataset original traía el espacio inicial (' 36 months')
+    
     # ALIAS aplicado para coincidir con la pipeline de entrenamiento
     antiguedad_empleo: Optional[str] = Field(default="desconocido", alias="antigüedad_empleo")
-
+    
 class PredictResponse(BaseModel):
     pd: float
     ead: float
